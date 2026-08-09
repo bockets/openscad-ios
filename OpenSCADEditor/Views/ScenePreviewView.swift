@@ -6,11 +6,14 @@ import SceneKit
 struct ScenePreviewView: UIViewRepresentable {
     /// The mesh to display. Replacing it updates the model node in place.
     var node: SCNNode
+    /// Whether the user can orbit/zoom the camera. Off in the small floating
+    /// preview so its own drag-to-move gesture owns every touch.
+    var allowsCameraControl: Bool = true
 
     func makeUIView(context: Context) -> SCNView {
         let view = SCNView()
         view.scene = makeScene(with: node)
-        view.allowsCameraControl = true
+        view.allowsCameraControl = allowsCameraControl
         view.autoenablesDefaultLighting = true
         view.antialiasingMode = .multisampling4X
         view.backgroundColor = .clear

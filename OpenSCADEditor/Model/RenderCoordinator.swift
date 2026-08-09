@@ -22,7 +22,10 @@ final class RenderCoordinator: ObservableObject {
     let renderer = OpenSCADRenderer()
 
     private var pending: Task<Void, Never>?
-    private let debounce: Duration = .milliseconds(300)
+    /// How long to coalesce rapid edits before rendering. Short enough that the
+    /// live preview feels responsive while typing, long enough to skip a render
+    /// on every keystroke.
+    private let debounce: Duration = .milliseconds(150)
 
     init() {
         node = MeshBuilder.placeholderNode(from: [])

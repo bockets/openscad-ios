@@ -1,5 +1,6 @@
 import SwiftUI
 import SceneKit
+import UIKit
 
 struct ContentView: View {
     @StateObject private var document = ScadDocument(
@@ -17,8 +18,6 @@ struct ContentView: View {
     /// the controls in the short viewport.
     @Environment(\.verticalSizeClass) private var verticalSizeClass
 
-    /// Accumulated drag translation of the floating source-editing preview.
-    @State private var floatingPreviewOffset: CGSize = .zero
     /// True while the source is actively changing, so the floating preview dims
     /// out of the way. Reset shortly after the last keystroke.
     @State private var isTypingSource = false
@@ -37,7 +36,7 @@ struct ContentView: View {
                     FloatingPreviewView(
                         node: coordinator.node,
                         isDimmed: isTypingSource,
-                        offset: $floatingPreviewOffset
+                        onTap: dismissKeyboard
                     )
                     .padding([.top, .trailing], 12)
                     .transition(.scale(scale: 0.85).combined(with: .opacity))
@@ -91,10 +90,19 @@ struct ContentView: View {
         }
     }
 
-    /// The draggable mini preview only makes sense while editing source in
-    /// portrait — landscape already shows the full preview beside the editor.
+    /// The mini preview only makes sense while editing source in portrait —
+    /// landscape already shows the full preview beside the editor.
     private var showsFloatingPreview: Bool {
         editorMode == .source && isEditingSource && !isLandscape
+    }
+
+    /// Resign the source editor's keyboard, which returns to the stacked split
+    /// view (the full preview above the editor). Broadcasting the action avoids
+    /// threading a focus binding down into the UIKit-backed editor.
+    private func dismissKeyboard() {
+        UIApplication.shared.sendAction(
+            #selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil
+        )
     }
 
     // MARK: - Layout
@@ -271,66 +279,38 @@ private struct LogSheet: View {
 }
 
 /// A small "picture-in-picture" render preview shown while editing source in
-/// portrait, so live changes stay visible over the code. Drag the header bar to
-/// move it off the text; it dims while typing. The scene area keeps its own
-/// orbit/zoom gestures — only the header handles dragging, so the two don't fight.
+/// portrait, so live changes stay visible over the code. Rotate it to orbit the
+/// model; tap it to dismiss the keyboard and return to the stacked split view.
+/// It dims while typing so it doesn't obscure the text.
 private struct FloatingPreviewView: View {
     let node: SCNNode
     let isDimmed: Bool
-    @Binding var offset: CGSize
+    /// Called on a tap (not a rotate) — returns to the split view.
+    let onTap: () -> Void
 
-    @GestureState private var dragTranslation: CGSize = .zero
-
-    private let width: CGFloat = 150
-    private let sceneHeight: CGFloat = 150
-    private let handleHeight: CGFloat = 26
+    private let size: CGFloat = 150
 
     var body: some View {
-        VStack(spacing: 0) {
-            handle
-            ScenePreviewView(node: node)
-                .frame(width: width, height: sceneHeight)
-                .background(
-                    LinearGradient(
-                        colors: [Color(white: 0.16), Color(white: 0.08)],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
+        ScenePreviewView(node: node)
+            .frame(width: size, height: size)
+            .background(
+                LinearGradient(
+                    colors: [Color(white: 0.16), Color(white: 0.08)],
+                    startPoint: .top,
+                    endPoint: .bottom
                 )
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .strokeBorder(.white.opacity(0.18), lineWidth: 1)
-        )
-        .shadow(color: .black.opacity(0.3), radius: 10, y: 4)
-        .opacity(isDimmed ? 0.35 : 0.96)
-        .animation(.easeInOut(duration: 0.2), value: isDimmed)
-        .offset(
-            x: offset.width + dragTranslation.width,
-            y: offset.height + dragTranslation.height
-        )
-    }
-
-    private var handle: some View {
-        ZStack {
-            Rectangle().fill(.ultraThinMaterial)
-            Image(systemName: "line.3.horizontal")
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(.secondary)
-        }
-        .frame(width: width, height: handleHeight)
-        .contentShape(Rectangle())
-        .gesture(
-            DragGesture()
-                .updating($dragTranslation) { value, state, _ in
-                    state = value.translation
-                }
-                .onEnded { value in
-                    offset.width += value.translation.width
-                    offset.height += value.translation.height
-                }
-        )
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .strokeBorder(.white.opacity(0.18), lineWidth: 1)
+            )
+            .shadow(color: .black.opacity(0.3), radius: 10, y: 4)
+            .opacity(isDimmed ? 0.35 : 0.96)
+            .animation(.easeInOut(duration: 0.2), value: isDimmed)
+            // A tap returns to the split view; the scene's own pan gesture (orbit)
+            // is a drag, not a tap, so rotating never triggers this.
+            .onTapGesture { onTap() }
     }
 }
 
