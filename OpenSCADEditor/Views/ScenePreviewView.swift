@@ -20,6 +20,10 @@ struct ScenePreviewView: UIViewRepresentable {
 
     func updateUIView(_ view: SCNView, context: Context) {
         guard let scene = view.scene else { return }
+        // Only swap when it's actually a new mesh. Unrelated re-renders (e.g.
+        // dragging the floating preview) re-invoke this every frame; tearing the
+        // node down and re-adding it each time stutters the SceneKit view.
+        guard context.coordinator.modelNode !== node else { return }
         // Replace only the model node so the user's camera framing is preserved.
         context.coordinator.modelNode?.removeFromParentNode()
         scene.rootNode.addChildNode(node)
