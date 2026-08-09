@@ -1,6 +1,5 @@
 import SwiftUI
 import SceneKit
-import UIKit
 
 struct ContentView: View {
     @StateObject private var document = ScadDocument(
@@ -18,11 +17,6 @@ struct ContentView: View {
     /// the controls in the short viewport.
     @Environment(\.verticalSizeClass) private var verticalSizeClass
 
-    /// True while the source is actively changing, so the floating preview dims
-    /// out of the way. Reset shortly after the last keystroke.
-    @State private var isTypingSource = false
-    private let typingIdle: Duration = .milliseconds(800)
-
     private enum EditorMode: Hashable {
         case customize
         case source
@@ -31,19 +25,7 @@ struct ContentView: View {
     var body: some View {
         NavigationStack {
             layout
-            .overlay(alignment: .topTrailing) {
-                if showsFloatingPreview {
-                    FloatingPreviewView(
-                        node: coordinator.node,
-                        isDimmed: isTypingSource,
-                        onTap: dismissKeyboard
-                    )
-                    .padding([.top, .trailing], 12)
-                    .transition(.scale(scale: 0.85).combined(with: .opacity))
-                }
-            }
-            .animation(.easeInOut(duration: 0.2), value: showsFloatingPreview)
-            .animation(.easeInOut(duration: 0.25), value: previewCollapsed)
+            .animation(.easeInOut(duration: 0.25), value: previewHeight)
             .navigationTitle(document.name)
             .navigationBarTitleDisplayMode(.inline)
             .toolbarColorScheme(.dark, for: .navigationBar)
@@ -78,31 +60,7 @@ struct ContentView: View {
             .onChange(of: document.source) { _, source in
                 coordinator.request(source: source, name: document.name)
             }
-            // Debounce a "typing" flag off the same source edits: each keystroke
-            // restarts this task, so the flag stays set while typing and clears
-            // shortly after the last change, dimming the floating preview.
-            .task(id: document.source) {
-                isTypingSource = true
-                try? await Task.sleep(for: typingIdle)
-                guard !Task.isCancelled else { return }
-                isTypingSource = false
-            }
         }
-    }
-
-    /// The mini preview only makes sense while editing source in portrait —
-    /// landscape already shows the full preview beside the editor.
-    private var showsFloatingPreview: Bool {
-        editorMode == .source && isEditingSource && !isLandscape
-    }
-
-    /// Resign the source editor's keyboard, which returns to the stacked split
-    /// view (the full preview above the editor). Broadcasting the action avoids
-    /// threading a focus binding down into the UIKit-backed editor.
-    private func dismissKeyboard() {
-        UIApplication.shared.sendAction(
-            #selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil
-        )
     }
 
     // MARK: - Layout
@@ -115,20 +73,16 @@ struct ContentView: View {
     private var layout: some View {
         if isLandscape {
             HStack(spacing: 0) {
-                if !previewCollapsed {
-                    preview
-                        .containerRelativeFrame(.horizontal) { width, _ in width * 0.5 }
-                    Divider()
-                }
+                preview
+                    .containerRelativeFrame(.horizontal) { width, _ in width * 0.5 }
+                Divider()
                 editor
             }
         } else {
             VStack(spacing: 0) {
-                if !previewCollapsed {
-                    preview
-                        .frame(height: 300)
-                    Divider()
-                }
+                preview
+                    .frame(height: previewHeight)
+                Divider()
                 editor
             }
         }
@@ -187,10 +141,11 @@ struct ContentView: View {
         .padding(.vertical, 8)
     }
 
-    /// When the source editor is focused, hide the preview so the editor gets the
-    /// space above the keyboard instead of being squeezed to a couple of lines.
-    private var previewCollapsed: Bool {
-        editorMode == .source && isEditingSource
+    /// Portrait preview height: shrink it while editing source (keyboard up) so
+    /// the editor gets more room above the keyboard, but keep it visible so live
+    /// changes still show.
+    private var previewHeight: CGFloat {
+        editorMode == .source && isEditingSource ? 140 : 300
     }
 
     @ViewBuilder
@@ -201,7 +156,6 @@ struct ContentView: View {
         case .source:
             SourceEditorView(text: $document.source, onFocusChange: { focused in
                 isEditingSource = focused
-                if !focused { isTypingSource = false }
             })
         }
     }
@@ -275,42 +229,6 @@ private struct LogSheet: View {
                 }
             }
         }
-    }
-}
-
-/// A small "picture-in-picture" render preview shown while editing source in
-/// portrait, so live changes stay visible over the code. Rotate it to orbit the
-/// model; tap it to dismiss the keyboard and return to the stacked split view.
-/// It dims while typing so it doesn't obscure the text.
-private struct FloatingPreviewView: View {
-    let node: SCNNode
-    let isDimmed: Bool
-    /// Called on a tap (not a rotate) — returns to the split view.
-    let onTap: () -> Void
-
-    private let size: CGFloat = 150
-
-    var body: some View {
-        ScenePreviewView(node: node)
-            .frame(width: size, height: size)
-            .background(
-                LinearGradient(
-                    colors: [Color(white: 0.16), Color(white: 0.08)],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .strokeBorder(.white.opacity(0.18), lineWidth: 1)
-            )
-            .shadow(color: .black.opacity(0.3), radius: 10, y: 4)
-            .opacity(isDimmed ? 0.35 : 0.96)
-            .animation(.easeInOut(duration: 0.2), value: isDimmed)
-            // A tap returns to the split view; the scene's own pan gesture (orbit)
-            // is a drag, not a tap, so rotating never triggers this.
-            .onTapGesture { onTap() }
     }
 }
 
