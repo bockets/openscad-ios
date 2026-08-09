@@ -7,7 +7,8 @@ struct ContentView: View {
         source: SampleLibrary.default.source
     )
     @StateObject private var coordinator = RenderCoordinator()
-    @State private var showingSamples = false
+    @StateObject private var store = ProjectStore()
+    @State private var showingProjects = false
     @State private var showingLog = false
     @State private var editorMode: EditorMode = .customize
     @State private var isEditingSource = false
@@ -35,9 +36,9 @@ struct ContentView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button {
-                        showingSamples = true
+                        openProjects()
                     } label: {
-                        Label("Samples", systemImage: "square.stack.3d.up")
+                        Label("Projects", systemImage: "folder")
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
@@ -48,20 +49,55 @@ struct ContentView: View {
                     }
                 }
             }
-            .confirmationDialog("Open sample", isPresented: $showingSamples, titleVisibility: .visible) {
-                ForEach(SampleLibrary.all, id: \.name) { sample in
-                    Button(sample.name) {
-                        document.load(name: sample.name, source: sample.source)
-                    }
-                }
+            .fullScreenCover(isPresented: $showingProjects) {
+                ProjectsListView(
+                    store: store,
+                    currentURL: document.currentURL,
+                    onOpen: { openProject($0) }
+                )
             }
             .sheet(isPresented: $showingLog) {
                 LogSheet(log: coordinator.log)
             }
+            .task { await bootstrapProjects() }
             .onAppear { coordinator.request(source: document.source, name: document.name) }
             .onChange(of: document.source) { _, source in
                 coordinator.request(source: source, name: document.name)
             }
+        }
+    }
+
+    // MARK: - Projects
+
+    /// Open the projects list, auto-saving the current model first if it's been edited.
+    private func openProjects() {
+        autosaveCurrent()
+        showingProjects = true
+    }
+
+    /// Open a stored project, persisting any edits to the current one first.
+    private func openProject(_ project: ScadProject) {
+        autosaveCurrent()
+        document.open(project, source: store.source(of: project))
+        showingProjects = false
+    }
+
+    /// Write the current source back to its backing file when there are unsaved edits.
+    private func autosaveCurrent() {
+        guard document.isDirty, let url = document.currentURL else { return }
+        if store.save(source: document.source, to: url) {
+            document.markSaved()
+        }
+    }
+
+    /// Resolve storage, seed the examples on first launch, and bind the launch
+    /// document to its backing file so edits from the very first session persist.
+    private func bootstrapProjects() async {
+        await store.bootstrap()
+        guard document.currentURL == nil else { return }
+        let launch = store.projects.first { $0.name == document.name } ?? store.projects.first
+        if let launch {
+            document.open(launch, source: store.source(of: launch))
         }
     }
 

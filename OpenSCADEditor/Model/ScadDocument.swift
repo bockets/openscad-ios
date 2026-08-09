@@ -12,16 +12,34 @@ final class ScadDocument: ObservableObject {
     }
     @Published private(set) var groups: [ScadParameterGroup]
 
-    init(name: String, source: String) {
+    /// The file backing this document, if any. Auto-save writes here.
+    private(set) var currentURL: URL?
+    /// The source last persisted to `currentURL`; edits diverge from this until saved.
+    private var savedSource: String
+
+    /// True when the in-memory source differs from what's on disk.
+    var isDirty: Bool { source != savedSource }
+
+    init(name: String, source: String, url: URL? = nil) {
         self.name = name
         self.source = source
         self.groups = ScadParser.parse(source)
+        self.currentURL = url
+        self.savedSource = source
     }
 
-    /// Replace the whole document with new source and reparse.
-    func load(name: String, source: String) {
-        self.name = name
+    /// Load a stored project, replacing the current document and rebinding the
+    /// backing file so subsequent edits auto-save to it.
+    func open(_ project: ScadProject, source: String) {
+        self.name = project.name
         self.source = source
+        self.currentURL = project.url
+        self.savedSource = source
+    }
+
+    /// Mark the current source as persisted (called after a successful save).
+    func markSaved() {
+        savedSource = source
     }
 
     /// Update a single parameter's value by rewriting its line in `source`.
