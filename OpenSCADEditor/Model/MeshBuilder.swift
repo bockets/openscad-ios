@@ -136,22 +136,27 @@ enum MeshBuilder {
         return node
     }
 
-    /// A material that colors each fragment by its face orientation (the classic
-    /// "normal material": world-space normal mapped to RGB). Faces keep their hue
-    /// as the camera orbits, so orientation reads at a glance.
+    /// A material that colors each face by its orientation (the classic "normal
+    /// material": world-space normal mapped to RGB) and then shades that color
+    /// with the scene's lights. Feeding the normal color into `_surface.diffuse`
+    /// as albedo — rather than forcing `_output.color` and bypassing lighting —
+    /// keeps the orientation hues while letting directional lights and ambient
+    /// occlusion add form, so parts read with depth instead of looking flat.
     private static func normalMaterial() -> SCNMaterial {
         let material = SCNMaterial()
-        material.lightingModel = .constant
+        material.lightingModel = .physicallyBased
+        material.metalness.contents = 0.0
+        material.roughness.contents = 0.65
         material.isDoubleSided = true
-        material.shaderModifiers = [.fragment: normalShaderModifier]
+        material.shaderModifiers = [.surface: normalShaderModifier]
         return material
     }
 
     private static let normalShaderModifier = """
     #pragma body
     vec3 worldNormal = normalize((scn_frame.inverseViewTransform * vec4(_surface.normal, 0.0)).xyz);
-    _output.color.rgb = worldNormal * 0.5 + 0.5;
-    _output.color.a = 1.0;
+    _surface.diffuse.rgb = worldNormal * 0.5 + 0.5;
+    _surface.diffuse.a = 1.0;
     """
 }
 

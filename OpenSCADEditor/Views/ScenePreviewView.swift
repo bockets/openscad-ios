@@ -1,5 +1,6 @@
 import SwiftUI
 import SceneKit
+import UIKit
 
 /// A SceneKit-backed 3D preview with built-in orbit / pinch-to-zoom / pan.
 /// Swap the displayed `node` and the camera keeps its position.
@@ -11,7 +12,9 @@ struct ScenePreviewView: UIViewRepresentable {
         let view = SCNView()
         view.scene = makeScene(with: node)
         view.allowsCameraControl = true
-        view.autoenablesDefaultLighting = true
+        // We supply our own lights (see `previewLights`) so faces shade by their
+        // angle to the light; the default flat headlight would wash that out.
+        view.autoenablesDefaultLighting = false
         view.antialiasingMode = .multisampling4X
         view.backgroundColor = .clear
         context.coordinator.modelNode = node
@@ -43,12 +46,48 @@ struct ScenePreviewView: UIViewRepresentable {
         let camera = SCNCamera()
         camera.zNear = 0.1
         camera.zFar = 10_000
+        // Screen-space ambient occlusion darkens creases and inside corners —
+        // the strongest depth cue for the hard-surface parts this renders.
+        camera.screenSpaceAmbientOcclusionIntensity = 1.6
+        camera.screenSpaceAmbientOcclusionRadius = 8
+        camera.screenSpaceAmbientOcclusionBias = 0.1
         let cameraNode = SCNNode()
         cameraNode.camera = camera
         cameraNode.position = SCNVector3(60, 45, 90)
         cameraNode.look(at: SCNVector3Zero)
         scene.rootNode.addChildNode(cameraNode)
 
+        previewLights().forEach(scene.rootNode.addChildNode)
+
         return scene
+    }
+
+    /// A three-light rig — ambient fill plus a bright key and a softer opposing
+    /// fill — so faces shade by their angle to the light and the model reads as
+    /// a solid form rather than a flat normal map. The ambient term keeps faces
+    /// turned away from the key from going fully black.
+    private func previewLights() -> [SCNNode] {
+        func directional(intensity: CGFloat, euler: SCNVector3) -> SCNNode {
+            let light = SCNLight()
+            light.type = .directional
+            light.intensity = intensity
+            light.color = UIColor.white
+            let node = SCNNode()
+            node.light = light
+            node.eulerAngles = euler
+            return node
+        }
+
+        let ambient = SCNLight()
+        ambient.type = .ambient
+        ambient.intensity = 220
+        ambient.color = UIColor.white
+        let ambientNode = SCNNode()
+        ambientNode.light = ambient
+
+        let key = directional(intensity: 850, euler: SCNVector3(-Float.pi / 4, Float.pi / 6, 0))
+        let fill = directional(intensity: 260, euler: SCNVector3(Float.pi / 5, -Float.pi / 3, 0))
+
+        return [ambientNode, key, fill]
     }
 }
