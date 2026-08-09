@@ -20,25 +20,22 @@ struct ProjectsListView: View {
             List {
                 Section {
                     ForEach(store.projects) { project in
-                        Button {
-                            onOpen(project)
-                        } label: {
-                            row(project)
-                        }
-                        .buttonStyle(.plain)
-                        .swipeActions(edge: .trailing) {
-                            Button(role: .destructive) {
-                                store.delete(project)
-                            } label: {
-                                Label("Delete", systemImage: "trash")
+                        row(project)
+                            .contentShape(Rectangle())
+                            .onTapGesture { onOpen(project) }
+                            .swipeActions(edge: .trailing) {
+                                Button(role: .destructive) {
+                                    store.delete(project)
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
+                                }
                             }
-                        }
-                        .swipeActions(edge: .leading) {
-                            ShareLink(item: project.url) {
-                                Label("Export", systemImage: "square.and.arrow.up")
+                            .swipeActions(edge: .leading) {
+                                ShareLink(item: project.url) {
+                                    Label("Export", systemImage: "square.and.arrow.up")
+                                }
+                                .tint(.blue)
                             }
-                            .tint(.blue)
-                        }
                     }
                 } footer: {
                     Text(store.isCloud
@@ -46,6 +43,10 @@ struct ProjectsListView: View {
                          : "Stored on this device. Add an iCloud entitlement to sync across devices.")
                 }
             }
+            // Plain (edge-to-edge) rows rather than the inset-grouped card, so
+            // swipe-to-reveal keeps square, full-bleed action buttons — the
+            // rounded card corners otherwise clip into 90° edges mid-swipe.
+            .listStyle(.plain)
             .overlay {
                 if store.projects.isEmpty {
                     ContentUnavailableView("No Projects", systemImage: "cube",
