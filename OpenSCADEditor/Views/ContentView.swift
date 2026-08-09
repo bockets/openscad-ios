@@ -1,0 +1,171 @@
+import SwiftUI
+import SceneKit
+
+struct ContentView: View {
+    @StateObject private var document = ScadDocument(
+        name: SampleLibrary.default.name,
+        source: SampleLibrary.default.source
+    )
+    @StateObject private var coordinator = RenderCoordinator()
+    @State private var showingSamples = false
+    @State private var showingLog = false
+    @State private var editorMode: EditorMode = .customize
+    @State private var isEditingSource = false
+
+    private enum EditorMode: Hashable {
+        case customize
+        case source
+    }
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                if !previewCollapsed {
+                    preview
+                    Divider()
+                }
+                modePicker
+                Divider()
+                bottomPane
+            }
+            .animation(.easeInOut(duration: 0.25), value: previewCollapsed)
+            .navigationTitle(document.name)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarColorScheme(.dark, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        showingSamples = true
+                    } label: {
+                        Label("Samples", systemImage: "square.stack.3d.up")
+                    }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    if let url = coordinator.exportURL {
+                        ShareLink(item: url) {
+                            Label("Export STL", systemImage: "square.and.arrow.up")
+                        }
+                    }
+                }
+            }
+            .confirmationDialog("Open sample", isPresented: $showingSamples, titleVisibility: .visible) {
+                ForEach(SampleLibrary.all, id: \.name) { sample in
+                    Button(sample.name) {
+                        document.load(name: sample.name, source: sample.source)
+                    }
+                }
+            }
+            .sheet(isPresented: $showingLog) {
+                LogSheet(log: coordinator.log)
+            }
+            .onAppear { coordinator.request(source: document.source, name: document.name) }
+            .onChange(of: document.source) { _, source in
+                coordinator.request(source: source, name: document.name)
+            }
+        }
+    }
+
+    private var modePicker: some View {
+        Picker("Editor mode", selection: $editorMode) {
+            Text("Customize").tag(EditorMode.customize)
+            Text("Source").tag(EditorMode.source)
+        }
+        .pickerStyle(.segmented)
+        .padding(.horizontal)
+        .padding(.vertical, 8)
+    }
+
+    /// When the source editor is focused, hide the preview so the editor gets the
+    /// space above the keyboard instead of being squeezed to a couple of lines.
+    private var previewCollapsed: Bool {
+        editorMode == .source && isEditingSource
+    }
+
+    @ViewBuilder
+    private var bottomPane: some View {
+        switch editorMode {
+        case .customize:
+            ParameterControlsView(document: document)
+        case .source:
+            SourceEditorView(text: $document.source, onFocusChange: { focused in
+                isEditingSource = focused
+            })
+        }
+    }
+
+    private var preview: some View {
+        ScenePreviewView(node: coordinator.node)
+            .frame(maxWidth: .infinity)
+            .frame(height: 300)
+            .background(
+                LinearGradient(
+                    colors: [Color(white: 0.16), Color(white: 0.08)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            )
+            .overlay(alignment: .top) { statusBar }
+    }
+
+    @ViewBuilder
+    private var statusBar: some View {
+        switch coordinator.status {
+        case .idle:
+            EmptyView()
+        case .rendering:
+            Label("Rendering…", systemImage: "gearshape.2")
+                .labelStyle(.titleAndIcon)
+                .font(.caption)
+                .padding(.horizontal, 12).padding(.vertical, 6)
+                .background(.ultraThinMaterial, in: Capsule())
+                .padding(.top, 8)
+        case .success:
+            EmptyView()
+        case .failure(let message):
+            Button {
+                showingLog = true
+            } label: {
+                Label(firstLine(message), systemImage: "exclamationmark.triangle.fill")
+                    .font(.caption)
+                    .lineLimit(1)
+                    .padding(.horizontal, 12).padding(.vertical, 6)
+                    .background(.red.opacity(0.85), in: Capsule())
+                    .foregroundStyle(.white)
+                    .padding(.top, 8)
+            }
+        }
+    }
+
+    private func firstLine(_ text: String) -> String {
+        text.split(separator: "\n").first.map(String.init) ?? "Render error"
+    }
+}
+
+/// Shows the raw OpenSCAD compiler log / error output.
+private struct LogSheet: View {
+    let log: String
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                Text(log.isEmpty ? "No output." : log)
+                    .font(.caption.monospaced())
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .textSelection(.enabled)
+                    .padding()
+            }
+            .navigationTitle("OpenSCAD Log")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+    }
+}
+
+#Preview {
+    ContentView()
+}

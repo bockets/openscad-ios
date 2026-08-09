@@ -1,0 +1,50 @@
+import SwiftUI
+import SceneKit
+
+/// A SceneKit-backed 3D preview with built-in orbit / pinch-to-zoom / pan.
+/// Swap the displayed `node` and the camera keeps its position.
+struct ScenePreviewView: UIViewRepresentable {
+    /// The mesh to display. Replacing it updates the model node in place.
+    var node: SCNNode
+
+    func makeUIView(context: Context) -> SCNView {
+        let view = SCNView()
+        view.scene = makeScene(with: node)
+        view.allowsCameraControl = true
+        view.autoenablesDefaultLighting = true
+        view.antialiasingMode = .multisampling4X
+        view.backgroundColor = .clear
+        context.coordinator.modelNode = node
+        return view
+    }
+
+    func updateUIView(_ view: SCNView, context: Context) {
+        guard let scene = view.scene else { return }
+        // Replace only the model node so the user's camera framing is preserved.
+        context.coordinator.modelNode?.removeFromParentNode()
+        scene.rootNode.addChildNode(node)
+        context.coordinator.modelNode = node
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    final class Coordinator {
+        var modelNode: SCNNode?
+    }
+
+    private func makeScene(with node: SCNNode) -> SCNScene {
+        let scene = SCNScene()
+        scene.rootNode.addChildNode(node)
+
+        let camera = SCNCamera()
+        camera.zNear = 0.1
+        camera.zFar = 10_000
+        let cameraNode = SCNNode()
+        cameraNode.camera = camera
+        cameraNode.position = SCNVector3(60, 45, 90)
+        cameraNode.look(at: SCNVector3Zero)
+        scene.rootNode.addChildNode(cameraNode)
+
+        return scene
+    }
+}

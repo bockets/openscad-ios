@@ -1,0 +1,15 @@
+{
+  "originHash" : "1dbd1505554b8c790788de85168df545b01d3fc989ab28f6bbe8d11c0cc514f7",
+  "pins" : [
+    {
+      "identity" : "swift-parsing",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/pointfreeco/swift-parsing",
+      "state" : {
+        "revision" : "42161b785368386648af8bc595d51aed9d316320",
+        "version" : "0.15.0"
+      }
+    }
+  ],
+  "version" : 3
+}

@@ -1,0 +1,108 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>OpenSCAD Engine</title></head>
+<body>
+<script>
+// Headless OpenSCAD compile host. Swift drives this page purely as a compute
+// engine: it hands us .scad source and we return binary STL bytes (base64).
+//
+// The engine glue (openscad.wasm.js) is a classic Emscripten script that reads a
+// global `OpenSCAD`/`Module` config object. We run it inside a fresh function
+// scope per instance via `new Function`, which isolates its globals and yields a
+// clean runtime each time (OpenSCAD calls exit(), so a runtime can only render
+// once). We pipeline the *next* instance while the current one renders.
+
+const post = (payload) => window.webkit?.messageHandlers?.status?.postMessage(payload);
+
+// Fetch the engine assets once (served locally via the custom URL scheme).
+const gluePromise = fetch('./openscad.wasm.js').then((r) => r.text());
+const wasmPromise = fetch('./openscad.wasm').then((r) => r.arrayBuffer());
+
+async function makeInstance() {
+  const glue = await gluePromise;
+  const wasmBinary = new Uint8Array(await wasmPromise);
+  const errbuf = [];
+
+  const config = {
+    noInitialRun: true,
+    wasmBinary,
+    locateFile: (path) => new URL('./' + path, document.baseURI).href,
+    print: () => {},
+    printErr: (text) => { errbuf.push(text); },
+  };
+
+  // `new Function('OpenSCAD', glue + 'return Module;')` — inside the body,
+  // `OpenSCAD` is the parameter, so `var Module = OpenSCAD` picks up our config,
+  // and every other `var` becomes a function local (no global leakage).
+  const factory = new Function('OpenSCAD', glue + '\nreturn Module;');
+
+  await new Promise((resolve, reject) => {
+    config.onRuntimeInitialized = () => resolve();
+    config.onAbort = (what) => reject(new Error('OpenSCAD abort: ' + what));
+    try {
+      factory(config);
+    } catch (e) {
+      reject(e);
+    }
+  });
+
+  config.__errbuf = errbuf;
+  return config;
+}
+
+// Keep one instance warming ahead of demand.
+let nextInstance = makeInstance();
+
+nextInstance.then(
+  () => post({ event: 'ready' }),
+  (e) => post({ event: 'error', message: String(e && e.message || e) })
+);
+
+function toBase64(bytes) {
+  let binary = '';
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+}
+
+window.renderScad = async function (source) {
+  let mod;
+  try {
+    mod = await nextInstance;
+  } catch (e) {
+    nextInstance = makeInstance();
+    return { ok: false, error: 'engine init failed: ' + String(e && e.message || e) };
+  }
+  // Start warming the next instance immediately (this one exits after use).
+  nextInstance = makeInstance();
+
+  try {
+    mod.FS.writeFile('/input.scad', source);
+    try { mod.FS.unlink('/out.stl'); } catch (e) {}
+
+    let exitCode = 0;
+    try {
+      mod.callMain(['/input.scad', '-o', '/out.stl', '--export-format=binstl']);
+    } catch (e) {
+      if (e && e.name === 'ExitStatus') { exitCode = e.status; }
+      else { throw e; }
+    }
+
+    let data = null;
+    try { data = mod.FS.readFile('/out.stl'); } catch (e) {}
+
+    const log = (mod.__errbuf || []).join('\n');
+    if (!data || data.length === 0) {
+      return { ok: false, error: log || ('OpenSCAD exited with code ' + exitCode), log };
+    }
+    return { ok: true, stl: toBase64(data), log };
+  } catch (e) {
+    const log = (mod.__errbuf || []).join('\n');
+    return { ok: false, error: String(e && e.message || e), log };
+  }
+};
+</script>
+</body>
+</html>
