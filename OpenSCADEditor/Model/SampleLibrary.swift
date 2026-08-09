@@ -41,12 +41,16 @@ enum SampleLibrary {
         static let teapot = """
         // Teapot
         //
-        // A smooth, rounded model — unlike a box, its curved surfaces catch the
-        // preview's lighting and ambient occlusion, so shading and depth actually read.
+        // A smooth, rounded model — its curved surfaces catch the preview's lighting
+        // and ambient occlusion, so shading and depth read (unlike a flat box).
+        //
+        // Built from a few solids of revolution (rotate_extrude) rather than a stack
+        // of hulled spheres, so OpenSCAD performs only a handful of boolean unions to
+        // make the STL and it renders quickly.
 
         /* [Size] */
         body_diameter = 60;   // [30:100]
-        body_squish = 0.8;    // [0.55:0.05:1]
+        body_squish = 0.85;   // [0.6:0.05:1.1]
 
         /* [Features] */
         show_lid = true;
@@ -54,51 +58,53 @@ enum SampleLibrary {
         show_handle = true;
 
         /* [Quality] */
-        resolution = 48;      // [24:8:96]
+        resolution = 64;      // [24:8:120]
 
         $fn = resolution;
 
-        body_r = body_diameter / 2;
-        top_z = body_r * body_squish;
+        r = body_diameter / 2;
+        h = body_diameter * body_squish;
 
         module body() {
-            scale([1, 1, body_squish]) sphere(r = body_r);
+            rotate_extrude()
+                polygon([
+                    [0,        0],
+                    [r * 0.40, 0],
+                    [r * 0.98, h * 0.20],
+                    [r * 1.00, h * 0.44],
+                    [r * 0.82, h * 0.68],
+                    [r * 0.55, h * 0.82],
+                    [0,        h * 0.82]
+                ]);
         }
 
         module lid() {
-            lid_r = body_r * 0.55;
-            translate([0, 0, top_z * 0.72])
-                scale([1, 1, 0.55]) sphere(r = lid_r);
-            translate([0, 0, top_z * 0.72 + lid_r * 0.45])
-                sphere(r = body_r * 0.12);
-        }
-
-        module spout_ball(t) {
-            x = body_r * (0.65 + 1.05 * t);
-            z = -body_r * 0.15 + body_r * 1.05 * pow(t, 1.4);
-            r = body_r * (0.22 * (1 - t) + 0.045);
-            translate([x, 0, z]) sphere(r = r, $fn = 24);
+            translate([0, 0, h * 0.80])
+                rotate_extrude()
+                    polygon([
+                        [0,        0],
+                        [r * 0.56, 0],
+                        [r * 0.46, h * 0.07],
+                        [r * 0.13, h * 0.11],
+                        [r * 0.13, h * 0.17],
+                        [r * 0.06, h * 0.22],
+                        [0,        h * 0.22]
+                    ]);
         }
 
         module spout() {
-            steps = 12;
-            for (i = [0 : steps - 1])
-                hull() { spout_ball(i / steps); spout_ball((i + 1) / steps); }
-        }
-
-        module handle_ball(t) {
-            ang = -120 + 240 * t;
-            arc_r = body_r * 0.62;
-            cx = -body_r * 0.78;
-            cz = body_r * 0.05;
-            translate([cx - arc_r * cos(ang), 0, cz + arc_r * sin(ang)])
-                sphere(r = body_r * 0.085, $fn = 24);
+            translate([r * 0.55, 0, h * 0.32])
+                rotate([0, 52, 0])
+                    cylinder(h = body_diameter * 0.85, r1 = r * 0.24, r2 = r * 0.07);
         }
 
         module handle() {
-            steps = 16;
-            for (i = [0 : steps - 1])
-                hull() { handle_ball(i / steps); handle_ball((i + 1) / steps); }
+            translate([-r * 0.78, 0, h * 0.50])
+                rotate([90, 0, 0])
+                    rotate([0, 0, 65])
+                        rotate_extrude(angle = 230)
+                            translate([r * 0.50, 0])
+                                circle(r = r * 0.085, $fn = 28);
         }
 
         module teapot() {
