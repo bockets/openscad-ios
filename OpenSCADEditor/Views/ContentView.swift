@@ -12,6 +12,10 @@ struct ContentView: View {
     @State private var showingLog = false
     @State private var editorMode: EditorMode = .customize
     @State private var isEditingSource = false
+    /// `.compact` vertical size means a landscape phone — lay the panes out
+    /// side by side instead of stacked, or a fixed-height preview would crush
+    /// the controls in the short viewport.
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
 
     private enum EditorMode: Hashable {
         case customize
@@ -20,15 +24,7 @@ struct ContentView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                if !previewCollapsed {
-                    preview
-                    Divider()
-                }
-                modePicker
-                Divider()
-                bottomPane
-            }
+            layout
             .animation(.easeInOut(duration: 0.25), value: previewCollapsed)
             .navigationTitle(document.name)
             .navigationBarTitleDisplayMode(.inline)
@@ -65,6 +61,44 @@ struct ContentView: View {
                 coordinator.request(source: source, name: document.name)
             }
         }
+    }
+
+    // MARK: - Layout
+
+    private var isLandscape: Bool { verticalSizeClass == .compact }
+
+    /// Portrait: preview stacked above the editor. Landscape: preview beside the
+    /// editor so the short viewport doesn't crush the controls.
+    @ViewBuilder
+    private var layout: some View {
+        if isLandscape {
+            HStack(spacing: 0) {
+                if !previewCollapsed {
+                    preview
+                        .containerRelativeFrame(.horizontal) { width, _ in width * 0.5 }
+                    Divider()
+                }
+                editor
+            }
+        } else {
+            VStack(spacing: 0) {
+                if !previewCollapsed {
+                    preview
+                        .frame(height: 300)
+                    Divider()
+                }
+                editor
+            }
+        }
+    }
+
+    private var editor: some View {
+        VStack(spacing: 0) {
+            modePicker
+            Divider()
+            bottomPane
+        }
+        .frame(maxWidth: .infinity)
     }
 
     // MARK: - Projects
@@ -131,8 +165,7 @@ struct ContentView: View {
 
     private var preview: some View {
         ScenePreviewView(node: coordinator.node)
-            .frame(maxWidth: .infinity)
-            .frame(height: 300)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(
                 LinearGradient(
                     colors: [Color(white: 0.16), Color(white: 0.08)],
