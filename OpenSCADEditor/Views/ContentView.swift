@@ -17,6 +17,13 @@ struct ContentView: View {
     /// the controls in the short viewport.
     @Environment(\.verticalSizeClass) private var verticalSizeClass
 
+    /// Accumulated drag translation of the floating source-editing preview.
+    @State private var floatingPreviewOffset: CGSize = .zero
+    /// True while the source is actively changing, so the floating preview dims
+    /// out of the way. Reset shortly after the last keystroke.
+    @State private var isTypingSource = false
+    private let typingIdle: Duration = .milliseconds(800)
+
     private enum EditorMode: Hashable {
         case customize
         case source
@@ -25,6 +32,18 @@ struct ContentView: View {
     var body: some View {
         NavigationStack {
             layout
+            .overlay(alignment: .topTrailing) {
+                if showsFloatingPreview {
+                    FloatingPreviewView(
+                        node: coordinator.node,
+                        isDimmed: isTypingSource,
+                        offset: $floatingPreviewOffset
+                    )
+                    .padding([.top, .trailing], 12)
+                    .transition(.scale(scale: 0.85).combined(with: .opacity))
+                }
+            }
+            .animation(.easeInOut(duration: 0.2), value: showsFloatingPreview)
             .animation(.easeInOut(duration: 0.25), value: previewCollapsed)
             .navigationTitle(document.name)
             .navigationBarTitleDisplayMode(.inline)
@@ -60,7 +79,22 @@ struct ContentView: View {
             .onChange(of: document.source) { _, source in
                 coordinator.request(source: source, name: document.name)
             }
+            // Debounce a "typing" flag off the same source edits: each keystroke
+            // restarts this task, so the flag stays set while typing and clears
+            // shortly after the last change, dimming the floating preview.
+            .task(id: document.source) {
+                isTypingSource = true
+                try? await Task.sleep(for: typingIdle)
+                guard !Task.isCancelled else { return }
+                isTypingSource = false
+            }
         }
+    }
+
+    /// The draggable mini preview only makes sense while editing source in
+    /// portrait — landscape already shows the full preview beside the editor.
+    private var showsFloatingPreview: Bool {
+        editorMode == .source && isEditingSource && !isLandscape
     }
 
     // MARK: - Layout
@@ -159,6 +193,7 @@ struct ContentView: View {
         case .source:
             SourceEditorView(text: $document.source, onFocusChange: { focused in
                 isEditingSource = focused
+                if !focused { isTypingSource = false }
             })
         }
     }
@@ -232,6 +267,70 @@ private struct LogSheet: View {
                 }
             }
         }
+    }
+}
+
+/// A small "picture-in-picture" render preview shown while editing source in
+/// portrait, so live changes stay visible over the code. Drag the header bar to
+/// move it off the text; it dims while typing. The scene area keeps its own
+/// orbit/zoom gestures — only the header handles dragging, so the two don't fight.
+private struct FloatingPreviewView: View {
+    let node: SCNNode
+    let isDimmed: Bool
+    @Binding var offset: CGSize
+
+    @GestureState private var dragTranslation: CGSize = .zero
+
+    private let width: CGFloat = 150
+    private let sceneHeight: CGFloat = 150
+    private let handleHeight: CGFloat = 26
+
+    var body: some View {
+        VStack(spacing: 0) {
+            handle
+            ScenePreviewView(node: node)
+                .frame(width: width, height: sceneHeight)
+                .background(
+                    LinearGradient(
+                        colors: [Color(white: 0.16), Color(white: 0.08)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .strokeBorder(.white.opacity(0.18), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.3), radius: 10, y: 4)
+        .opacity(isDimmed ? 0.35 : 0.96)
+        .animation(.easeInOut(duration: 0.2), value: isDimmed)
+        .offset(
+            x: offset.width + dragTranslation.width,
+            y: offset.height + dragTranslation.height
+        )
+    }
+
+    private var handle: some View {
+        ZStack {
+            Rectangle().fill(.ultraThinMaterial)
+            Image(systemName: "line.3.horizontal")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.secondary)
+        }
+        .frame(width: width, height: handleHeight)
+        .contentShape(Rectangle())
+        .gesture(
+            DragGesture()
+                .updating($dragTranslation) { value, state, _ in
+                    state = value.translation
+                }
+                .onEnded { value in
+                    offset.width += value.translation.width
+                    offset.height += value.translation.height
+                }
+        )
     }
 }
 
