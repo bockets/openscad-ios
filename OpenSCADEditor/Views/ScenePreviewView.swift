@@ -53,41 +53,12 @@ struct ScenePreviewView: UIViewRepresentable {
         camera.screenSpaceAmbientOcclusionBias = 0.1
         let cameraNode = SCNNode()
         cameraNode.camera = camera
-        cameraNode.position = SCNVector3(60, 45, 90)
+        cameraNode.position = PreviewLighting.cameraDirection
         cameraNode.look(at: SCNVector3Zero)
         scene.rootNode.addChildNode(cameraNode)
 
-        previewLights().forEach(scene.rootNode.addChildNode)
+        PreviewLighting.rig().forEach(scene.rootNode.addChildNode)
 
         return scene
-    }
-
-    /// A three-light rig — ambient fill plus a bright key and a softer opposing
-    /// fill — so faces shade by their angle to the light and the model reads as
-    /// a solid form rather than a flat normal map. The ambient term keeps faces
-    /// turned away from the key from going fully black.
-    private func previewLights() -> [SCNNode] {
-        func directional(intensity: CGFloat, euler: SCNVector3) -> SCNNode {
-            let light = SCNLight()
-            light.type = .directional
-            light.intensity = intensity
-            light.color = UIColor.white
-            let node = SCNNode()
-            node.light = light
-            node.eulerAngles = euler
-            return node
-        }
-
-        let ambient = SCNLight()
-        ambient.type = .ambient
-        ambient.intensity = 220
-        ambient.color = UIColor.white
-        let ambientNode = SCNNode()
-        ambientNode.light = ambient
-
-        let key = directional(intensity: 850, euler: SCNVector3(-Float.pi / 4, Float.pi / 6, 0))
-        let fill = directional(intensity: 260, euler: SCNVector3(Float.pi / 5, -Float.pi / 3, 0))
-
-        return [ambientNode, key, fill]
     }
 }

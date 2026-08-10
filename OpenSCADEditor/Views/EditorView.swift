@@ -52,7 +52,10 @@ struct EditorView: View {
                 LogSheet(log: coordinator.log)
             }
             .onAppear { coordinator.request(source: document.source, name: document.name) }
-            .onDisappear { autosave() }
+            .onDisappear {
+                autosave()
+                captureThumbnail()
+            }
             .onChange(of: document.source) { _, source in
                 coordinator.request(source: source, name: document.name)
             }
@@ -97,6 +100,15 @@ struct EditorView: View {
         guard document.isDirty, let url = document.currentURL else { return }
         if store.save(source: document.source, to: url) {
             document.markSaved()
+        }
+    }
+
+    /// Snapshot the current mesh into the project's list thumbnail. Only captures
+    /// a successful render, so a failed edit leaves the previous thumbnail intact.
+    private func captureThumbnail() {
+        guard coordinator.status == .success, let url = document.currentURL else { return }
+        if let data = ThumbnailRenderer.pngData(of: coordinator.node) {
+            store.saveThumbnail(data, for: url)
         }
     }
 

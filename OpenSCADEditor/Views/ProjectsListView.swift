@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import UniformTypeIdentifiers
 
 /// The app's home screen: a list of stored `.scad` projects. Tapping a row opens
@@ -84,8 +85,7 @@ struct ProjectsListView: View {
 
     private func row(_ project: ScadProject) -> some View {
         HStack(spacing: 12) {
-            Image(systemName: "cube")
-                .foregroundStyle(.secondary)
+            thumbnail(project)
             VStack(alignment: .leading, spacing: 2) {
                 Text(project.name)
                     .foregroundStyle(.primary)
@@ -99,6 +99,27 @@ struct ProjectsListView: View {
                 .foregroundStyle(.tertiary)
         }
         .contentShape(Rectangle())
+    }
+
+    /// The rendered preview captured when the project was last closed, or a
+    /// placeholder cube for projects that haven't been opened yet.
+    @ViewBuilder
+    private func thumbnail(_ project: ScadProject) -> some View {
+        let side: CGFloat = 44
+        Group {
+            if let url = project.thumbnailURL, let image = UIImage(contentsOfFile: url.path) {
+                Image(uiImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+            } else {
+                Image(systemName: "cube")
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color(white: 0.12))
+            }
+        }
+        .frame(width: side, height: side)
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 
     private func createNew() {

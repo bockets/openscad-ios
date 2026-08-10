@@ -39,10 +39,13 @@ final class ProjectStore: ObservableObject {
             .map { url in
                 let modified = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?
                     .contentModificationDate ?? .distantPast
+                let thumbnail = thumbnailURL(for: url)
+                let hasThumbnail = thumbnail.map { FileManager.default.fileExists(atPath: $0.path) } ?? false
                 return ScadProject(
                     url: url,
                     name: url.deletingPathExtension().lastPathComponent,
-                    modifiedAt: modified
+                    modifiedAt: modified,
+                    thumbnailURL: hasThumbnail ? thumbnail : nil
                 )
             }
             .sorted { $0.modifiedAt > $1.modifiedAt }
@@ -79,7 +82,30 @@ final class ProjectStore: ObservableObject {
 
     func delete(_ project: ScadProject) {
         try? FileManager.default.removeItem(at: project.url)
+        if let thumbnail = thumbnailURL(for: project.url) {
+            try? FileManager.default.removeItem(at: thumbnail)
+        }
         refresh()
+    }
+
+    /// Persist a rendered preview image for a project, keyed by its file name.
+    /// Thumbnails live in a hidden `.thumbnails` subfolder so they never surface
+    /// as projects (which are matched by the `.scad` extension) or in Files.
+    func saveThumbnail(_ data: Data, for url: URL) {
+        guard let dir = thumbnailsDirectory, let dest = thumbnailURL(for: url) else { return }
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        guard (try? data.write(to: dest, options: .atomic)) != nil else { return }
+        refresh()
+    }
+
+    private var thumbnailsDirectory: URL? {
+        container?.appendingPathComponent(".thumbnails", isDirectory: true)
+    }
+
+    private func thumbnailURL(for url: URL) -> URL? {
+        thumbnailsDirectory?
+            .appendingPathComponent(url.deletingPathExtension().lastPathComponent)
+            .appendingPathExtension("png")
     }
 
     /// Copy a Files-app–picked document into the container, reading it under its

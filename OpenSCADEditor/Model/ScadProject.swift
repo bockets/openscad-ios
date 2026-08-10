@@ -10,6 +10,9 @@ struct ScadProject: Identifiable, Equatable, Hashable {
     let name: String
     /// Last modification time, used to sort most-recent first.
     let modifiedAt: Date
+    /// A rendered preview image for the projects list, if one has been captured
+    /// (written when the project is closed). Nil falls back to a placeholder icon.
+    let thumbnailURL: URL?
 
     var id: URL { url }
 }
