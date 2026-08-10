@@ -52,12 +52,12 @@ struct EditorView: View {
                 LogSheet(log: coordinator.log)
             }
             .onAppear { coordinator.request(source: document.source, name: document.name) }
-            .onDisappear {
-                autosave()
-                captureThumbnail()
-            }
+            .onDisappear { autosave() }
             .onChange(of: document.source) { _, source in
                 coordinator.request(source: source, name: document.name)
+            }
+            .onChange(of: coordinator.status) { _, status in
+                if status == .success { captureThumbnail() }
             }
     }
 
