@@ -18,29 +18,23 @@ struct ProjectsListView: View {
     var body: some View {
         NavigationStack {
             List {
-                Section {
-                    ForEach(store.projects) { project in
-                        row(project)
-                            .contentShape(Rectangle())
-                            .onTapGesture { onOpen(project) }
-                            .swipeActions(edge: .trailing) {
-                                Button(role: .destructive) {
-                                    store.delete(project)
-                                } label: {
-                                    Label("Delete", systemImage: "trash")
-                                }
+                ForEach(store.projects) { project in
+                    row(project)
+                        .contentShape(Rectangle())
+                        .onTapGesture { onOpen(project) }
+                        .swipeActions(edge: .trailing) {
+                            Button(role: .destructive) {
+                                store.delete(project)
+                            } label: {
+                                Label("Delete", systemImage: "trash")
                             }
-                            .swipeActions(edge: .leading) {
-                                ShareLink(item: project.url) {
-                                    Label("Export", systemImage: "square.and.arrow.up")
-                                }
-                                .tint(.blue)
+                        }
+                        .swipeActions(edge: .leading) {
+                            ShareLink(item: project.url) {
+                                Label("Export", systemImage: "square.and.arrow.up")
                             }
-                    }
-                } footer: {
-                    Text(store.isCloud
-                         ? "Synced with iCloud."
-                         : "Stored on this device. Add an iCloud entitlement to sync across devices.")
+                            .tint(.blue)
+                        }
                 }
             }
             // Plain (edge-to-edge) rows rather than the inset-grouped card, so
