@@ -92,6 +92,11 @@ enum MeshBuilder {
 
         let node = SCNNode(geometry: geometry)
         node.centerAtOrigin()
+        // OpenSCAD/STL is Z-up; SceneKit is Y-up. Without this the model lands on
+        // its side (its "up" points at the camera). Rotate -90° about X so the
+        // model's +Z becomes the scene's +Y and it stands upright. Applied after
+        // centering so the tilt pivots around the model's middle, not a corner.
+        node.eulerAngles.x = -.pi / 2
         return node
     }
 
