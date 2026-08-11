@@ -28,7 +28,9 @@ final class RenderCoordinator: ObservableObject {
     private let debounce: Duration = .milliseconds(150)
 
     init() {
-        node = MeshBuilder.placeholderNode(from: [])
+        // Start empty — the preview stays blank (behind the "Rendering…" pill)
+        // until the first real mesh lands, rather than flashing a placeholder box.
+        node = SCNNode()
     }
 
     /// Request a render of `source`, cancelling any queued/in-flight request.

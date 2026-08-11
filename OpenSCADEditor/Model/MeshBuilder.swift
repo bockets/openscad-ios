@@ -2,49 +2,8 @@ import Foundation
 import SceneKit
 import UIKit
 
-/// Builds SceneKit geometry for the preview: a parametric placeholder box in
-/// stage 1, and (stage 2) a mesh loaded from OpenSCAD's binary STL output.
+/// Builds SceneKit geometry for the preview from OpenSCAD's STL output.
 enum MeshBuilder {
-
-    // MARK: - Placeholder (stage 1)
-
-    /// A box sized from common dimension parameters, so tweaking width/height/
-    /// depth visibly updates the preview before the real engine is wired in.
-    static func placeholderNode(from groups: [ScadParameterGroup]) -> SCNNode {
-        let numbers = numericValues(in: groups)
-        func dim(_ names: [String], default def: Double) -> Double {
-            for name in names {
-                if let value = numbers[name.lowercased()], value > 0 { return value }
-            }
-            return def
-        }
-
-        let width = dim(["width", "w", "size", "x"], default: 20)
-        let height = dim(["height", "h", "z", "thickness"], default: 20)
-        let depth = dim(["depth", "length", "d", "l", "y"], default: 20)
-
-        let box = SCNBox(
-            width: CGFloat(width),
-            height: CGFloat(height),
-            length: CGFloat(depth),
-            chamferRadius: CGFloat(min(width, height, depth) * 0.03)
-        )
-        box.materials = [normalMaterial()]
-
-        return SCNNode(geometry: box)
-    }
-
-    private static func numericValues(in groups: [ScadParameterGroup]) -> [String: Double] {
-        var result: [String: Double] = [:]
-        for parameter in groups.flatMap(\.parameters) {
-            if case .number(let n) = parameter.value {
-                result[parameter.name.lowercased()] = n
-            }
-        }
-        return result
-    }
-
-    // MARK: - STL (stage 2)
 
     /// Parses STL output (binary or ASCII) into a SceneKit node, or nil if the
     /// data isn't a mesh we can read.
