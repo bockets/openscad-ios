@@ -1,0 +1,110 @@
+name: TestFlight
+
+# Every push to main builds a signed release, uploads the .ipa as a downloadable
+# workflow artifact, and ships it to TestFlight. Also runnable on demand.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# One release at a time. Don't cancel a run mid-upload, or a half-uploaded build
+# can wedge App Store Connect processing.
+concurrency:
+  group: testflight
+  cancel-in-progress: false
+
+jobs:
+  testflight:
+    runs-on: macos-15
+    env:
+      PROJECT: OpenSCADEditor.xcodeproj
+      SCHEME: OpenSCADEditor
+      ARCHIVE_PATH: ${{ github.workspace }}/build/OpenSCADEditor.xcarchive
+      EXPORT_DIR: ${{ github.workspace }}/build/export
+      API_KEY_PATH: ${{ github.workspace }}/private_keys/AuthKey.p8
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: xcodebuild -version
+
+      - name: Write App Store Connect API key
+        env:
+          ASC_API_KEY_P8: ${{ secrets.ASC_API_KEY_P8 }}
+        run: |
+          mkdir -p "$(dirname "$API_KEY_PATH")"
+          printf '%s' "$ASC_API_KEY_P8" > "$API_KEY_PATH"
+
+      - name: Archive
+        env:
+          TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          BUNDLE_ID: ${{ secrets.IOS_BUNDLE_ID }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          xcodebuild archive \
+            -project "$PROJECT" \
+            -scheme "$SCHEME" \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$ARCHIVE_PATH" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$API_KEY_PATH" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            DEVELOPMENT_TEAM="$TEAM_ID" \
+            PRODUCT_BUNDLE_IDENTIFIER="$BUNDLE_ID" \
+            CURRENT_PROJECT_VERSION="${{ github.run_number }}" \
+            CODE_SIGN_STYLE=Automatic \
+            INFOPLIST_KEY_ITSAppUsesNonExemptEncryption=NO
+
+      - name: Export .ipa
+        env:
+          TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>export</string>
+            <key>teamID</key><string>${TEAM_ID}</string>
+            <key>signingStyle</key><string>automatic</string>
+            <key>uploadSymbols</key><true/>
+          </dict>
+          </plist>
+          PLIST
+          xcodebuild -exportArchive \
+            -archivePath "$ARCHIVE_PATH" \
+            -exportPath "$EXPORT_DIR" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$API_KEY_PATH" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+
+      - name: Upload .ipa as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: OpenSCADEditor-ipa
+          path: ${{ env.EXPORT_DIR }}/*.ipa
+          if-no-files-found: error
+
+      - name: Upload to TestFlight
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          # altool finds the key by name in these dirs; place it where it looks.
+          mkdir -p ~/.appstoreconnect/private_keys
+          cp "$API_KEY_PATH" ~/.appstoreconnect/private_keys/AuthKey_${ASC_KEY_ID}.p8
+          IPA="$(ls "$EXPORT_DIR"/*.ipa | head -1)"
+          xcrun altool --upload-app -f "$IPA" --type ios \
+            --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID"
+
+      - name: Clean up API key
+        if: always()
+        run: rm -f "$API_KEY_PATH" ~/.appstoreconnect/private_keys/AuthKey_*.p8
