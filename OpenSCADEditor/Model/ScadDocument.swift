@@ -60,4 +60,16 @@ final class ScadDocument: ObservableObject {
     var allParameters: [ScadParameter] {
         groups.flatMap(\.parameters)
     }
+
+    /// Writes the current source to a temp `.scad` file named after the document,
+    /// ready to hand to the share sheet. Overwrites any previous export. Uses the
+    /// live in-memory source (not the on-disk file) so a share reflects unsaved
+    /// edits. Returns nil if writing fails.
+    func sourceExportURL() -> URL? {
+        let safe = name.isEmpty ? "model" : name
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("\(safe).scad")
+        guard let data = source.data(using: .utf8),
+              (try? data.write(to: url, options: .atomic)) != nil else { return nil }
+        return url
+    }
 }

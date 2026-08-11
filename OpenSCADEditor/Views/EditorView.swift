@@ -41,10 +41,27 @@ struct EditorView: View {
             .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    if let url = coordinator.exportURL {
-                        ShareLink(item: url) {
-                            Label("Export STL", systemImage: "square.and.arrow.up")
+                    Menu {
+                        // STL only becomes available after a successful render.
+                        if let stlURL = coordinator.exportURL {
+                            ShareLink(
+                                item: stlURL,
+                                preview: SharePreview("\(document.name).stl")
+                            ) {
+                                Label("STL model", systemImage: "cube")
+                            }
                         }
+                        // Source is always exportable, even before the first render.
+                        if let scadURL = document.sourceExportURL() {
+                            ShareLink(
+                                item: scadURL,
+                                preview: SharePreview("\(document.name).scad")
+                            ) {
+                                Label("OpenSCAD source", systemImage: "doc.plaintext")
+                            }
+                        }
+                    } label: {
+                        Label("Export", systemImage: "square.and.arrow.up")
                     }
                 }
             }

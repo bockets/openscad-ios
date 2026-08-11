@@ -19,7 +19,9 @@ inside the app.
   ambient occlusion so parts read with depth. Faces are shaded by orientation
   (the classic "normal material").
 - **Projects list** with an auto-rendered thumbnail per project.
-- **STL export** of the latest successful render via the share sheet.
+- **Export** from the editor's share menu — the latest successful render as an
+  `.stl` mesh, or the current `.scad` source — each handed to the system share
+  sheet (save to Files, AirDrop, open in a slicer, …).
 - **iCloud sync** when the iCloud entitlement is present on a signed build;
   otherwise projects live in the local Documents directory and everything else
   still works.
