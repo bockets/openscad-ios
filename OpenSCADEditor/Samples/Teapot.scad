@@ -24,18 +24,37 @@ $fn = resolution;
 r = body_diameter / 2;
 h = body_diameter * body_squish;
 
-// Belly of the pot: one solid of revolution, no booleans.
+wall  = r * 0.12;   // shell/floor thickness
+mouth = r * 0.42;   // radius of the top opening the lid covers
+
+// Belly of the pot: an outer solid of revolution with an inner cavity carved
+// out and the top opened, so it's a hollow pot the lid seats onto.
 module body() {
-    rotate_extrude()
-        polygon([
-            [0,        0],
-            [r * 0.40, 0],
-            [r * 0.98, h * 0.20],
-            [r * 1.00, h * 0.44],
-            [r * 0.82, h * 0.68],
-            [r * 0.55, h * 0.82],
-            [0,        h * 0.82]
-        ]);
+    difference() {
+        rotate_extrude()
+            polygon([
+                [0,        0],
+                [r * 0.40, 0],
+                [r * 0.98, h * 0.20],
+                [r * 1.00, h * 0.44],
+                [r * 0.82, h * 0.68],
+                [r * 0.55, h * 0.82],
+                [0,        h * 0.82]
+            ]);
+        // Inner cavity: follows the wall up and past the rim within `mouth`,
+        // leaving a `wall`-thick floor and an annular rim lip for the lid.
+        rotate_extrude()
+            polygon([
+                [0,          wall],
+                [r * 0.30,   wall],
+                [r * 0.86,   h * 0.22],
+                [r * 0.88,   h * 0.44],
+                [r * 0.70,   h * 0.66],
+                [mouth,      h * 0.82],
+                [mouth,      h * 0.98],
+                [0,          h * 0.98]
+            ]);
+    }
 }
 
 // Domed lid with a knob, also one revolve.
