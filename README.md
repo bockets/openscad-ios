@@ -32,16 +32,13 @@ OpenSCAD is compiled to WebAssembly and hosted headlessly in an off-screen
 `WKWebView`. Swift hands it `.scad` source and gets binary STL back; nothing is
 ever displayed in the web view.
 
-```
-ScadDocument ──edit──▶ RenderCoordinator ──debounce──▶ OpenSCADRenderer
-                              ▲                               │
-                              │                         WKWebView (headless)
-                              │                          OpenSCAD.wasm
-                        SCNNode (mesh)                        │
-                              │                          binary STL
-                        MeshBuilder ◀──────────────────────────┘
-                              │
-                     ScenePreviewView (SceneKit)
+```mermaid
+flowchart TB
+    ScadDocument -- edit --> RenderCoordinator
+    RenderCoordinator -- "debounce (~150 ms)" --> OpenSCADRenderer
+    OpenSCADRenderer --> WKWebView["WKWebView (headless)<br/>OpenSCAD.wasm"]
+    WKWebView -- binary STL --> MeshBuilder
+    MeshBuilder -- SCNNode (mesh) --> ScenePreviewView["ScenePreviewView (SceneKit)"]
 ```
 
 Key pieces:
