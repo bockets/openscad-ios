@@ -144,8 +144,22 @@ final class ProjectStore: ObservableObject {
             if !FileManager.default.fileExists(atPath: url.path) {
                 try? sample.source.data(using: .utf8)?.write(to: url, options: .atomic)
             }
+            seedBundledThumbnail(named: sample.name, for: url)
         }
         FileManager.default.createFile(atPath: marker.path, contents: nil)
+    }
+
+    /// Seed a bundled pre-rendered thumbnail for a seeded sample, so its projects-list
+    /// tile shows the model on first launch instead of the empty placeholder (the
+    /// live render only produces one once the user opens it). Skips silently if the
+    /// bundle ships no `<name>.png` or a thumbnail is already present.
+    private func seedBundledThumbnail(named name: String, for scadURL: URL) {
+        guard let bundled = Bundle.main.url(forResource: name, withExtension: "png"),
+              let dir = thumbnailsDirectory,
+              let dest = thumbnailURL(for: scadURL),
+              !FileManager.default.fileExists(atPath: dest.path) else { return }
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try? FileManager.default.copyItem(at: bundled, to: dest)
     }
 
     /// Resolve the storage container off the main actor. The iCloud ubiquity lookup
