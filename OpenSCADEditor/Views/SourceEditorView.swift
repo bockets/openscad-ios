@@ -176,6 +176,7 @@ enum SyntaxHighlighter {
         options: NSRegularExpression.Options = []
     ) -> NSRegularExpression {
         // Patterns are compile-time constants; a bad one is a programmer error.
+        // swiftlint:disable:next force_try
         try! NSRegularExpression(pattern: pattern, options: options)
     }
 

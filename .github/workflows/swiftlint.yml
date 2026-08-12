@@ -1,0 +1,25 @@
+name: SwiftLint
+
+# Lint the app's Swift sources on every pull request. Runs in --strict mode, so
+# warnings fail the check too, keeping new code clean rather than only blocking
+# on hard errors.
+on:
+  pull_request:
+  workflow_dispatch:
+
+# A newer push to the same PR supersedes an in-flight lint run.
+concurrency:
+  group: swiftlint-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  swiftlint:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install SwiftLint
+        run: command -v swiftlint >/dev/null || brew install swiftlint
+
+      - name: Lint
+        run: swiftlint lint --strict --reporter github-actions-logging
