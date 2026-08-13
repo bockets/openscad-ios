@@ -1,0 +1,35 @@
+# SwiftLint configuration for OpenSCAD Editor.
+# Lints only the app's own sources; build output and the resolved Swift Package
+# checkouts under build/ are not ours to police.
+
+included:
+  - OpenSCADEditor
+
+excluded:
+  - build
+
+# Short single-letter names are idiomatic in the geometry/parser math (vertex
+# components, byte cursors, parser combinators), so allow them rather than
+# rename working code.
+identifier_name:
+  min_length:
+    warning: 1
+    error: 1
+
+# The teapot sample and a few view builders run long; keep the length rules as
+# guidance without failing the build on them.
+line_length:
+  warning: 140
+  error: 200
+
+file_length:
+  warning: 500
+  error: 800
+
+type_body_length:
+  warning: 350
+  error: 500
+
+function_body_length:
+  warning: 80
+  error: 120
